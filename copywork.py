@@ -26,16 +26,19 @@ def toggle_mode():
         current_mode = "practice"
         mode_label.config(text="Mode: Practice")
         text_area.config(state=tk.DISABLED)
-        current_position = "1.0"
-        text_area.tag_remove("correct", "1.0", tk.END)
-        text_area.tag_remove("incorrect", "1.0", tk.END)
-        text_area.mark_set("insert", current_position)
+        # Don't reset the cursor position if returning to practice mode
+        if current_position == "1.0":  # Only set to beginning if first time
+            current_position = "1.0"
+            text_area.mark_set("insert", current_position)
+        # Don't remove color tags anymore
         app.bind("<Key>", check_typing)
+        text_area.bind("<Button-1>", set_cursor_position)
     else:
         current_mode = "edit"
         mode_label.config(text="Mode: Edit")
         text_area.config(state=tk.NORMAL)
         app.unbind("<Key>")
+        text_area.unbind("<Button-1>")
 
 def check_typing(event):
     global current_position
@@ -86,6 +89,20 @@ def check_typing(event):
         text_area.mark_set("insert", current_position)
     
     return "break"  # Prevent default handling
+
+def set_cursor_position(event):
+    global current_position
+    
+    # Get the position where the user clicked
+    index = text_area.index(f"@{event.x},{event.y}")
+    
+    # Update current position
+    current_position = index
+    
+    # Move cursor to the new position
+    text_area.mark_set("insert", current_position)
+    
+    return "break"
 
 app = tk.Tk()
 app.title("Text Editor with Practice Mode")
