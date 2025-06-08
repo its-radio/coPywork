@@ -1,6 +1,7 @@
 #!/bin/env python3
 import tkinter as tk
 from tkinter import filedialog, messagebox
+import json
 
 # Global variables
 current_mode = "edit"  # "edit" or "practice"
@@ -9,15 +10,63 @@ current_position = "1.0"
 def save_file():
     file_path = filedialog.asksaveasfilename(defaultextension=".txt")
     if file_path:
+        # Save the text content
         with open(file_path, 'w') as file:
             file.write(text_area.get(1.0, tk.END))
+        
+        # Save color information to a companion file
+        color_data = {
+            "correct": [],
+            "incorrect": []
+        }
+        
+        # Get all ranges with "correct" tag
+        correct_ranges = text_area.tag_ranges("correct")
+        for i in range(0, len(correct_ranges), 2):
+            start = text_area.index(correct_ranges[i])
+            end = text_area.index(correct_ranges[i+1])
+            color_data["correct"].append((start, end))
+        
+        # Get all ranges with "incorrect" tag
+        incorrect_ranges = text_area.tag_ranges("incorrect")
+        for i in range(0, len(incorrect_ranges), 2):
+            start = text_area.index(incorrect_ranges[i])
+            end = text_area.index(incorrect_ranges[i+1])
+            color_data["incorrect"].append((start, end))
+        
+        # Save color data to a companion file
+        color_file_path = file_path + ".colors"
+        with open(color_file_path, 'w') as color_file:
+            json.dump(color_data, color_file)
 
 def open_file():
     file_path = filedialog.askopenfilename()
     if file_path:
+        # Open the text content
         with open(file_path, 'r') as file:
             text_area.delete(1.0, tk.END)
             text_area.insert(tk.END, file.read())
+        
+        # Clear existing color tags
+        text_area.tag_remove("correct", "1.0", tk.END)
+        text_area.tag_remove("incorrect", "1.0", tk.END)
+        
+        # Try to load color information from companion file
+        color_file_path = file_path + ".colors"
+        try:
+            with open(color_file_path, 'r') as color_file:
+                color_data = json.load(color_file)
+                
+                # Apply "correct" tags
+                for start, end in color_data["correct"]:
+                    text_area.tag_add("correct", start, end)
+                
+                # Apply "incorrect" tags
+                for start, end in color_data["incorrect"]:
+                    text_area.tag_add("incorrect", start, end)
+        except FileNotFoundError:
+            # No color data file exists, that's okay
+            pass
 
 def toggle_mode():
     global current_mode, current_position
@@ -104,8 +153,14 @@ def set_cursor_position(event):
     
     return "break"
 
+def reset_colors():
+    # Remove all color tags from the text
+    text_area.tag_remove("correct", "1.0", tk.END)
+    text_area.tag_remove("incorrect", "1.0", tk.END)
+    messagebox.showinfo("Reset", "All color formatting has been reset.")
+
 app = tk.Tk()
-app.title("Text Editor with Practice Mode")
+app.title("CoPywork")
 app.geometry("600x400")
 
 # Create a frame for the mode label
@@ -136,6 +191,7 @@ menu_bar.add_cascade(label="File", menu=file_menu)
 # Add mode menu
 mode_menu = tk.Menu(menu_bar, tearoff=0)
 mode_menu.add_command(label="Toggle Mode", command=toggle_mode)
+mode_menu.add_command(label="Reset Colors", command=reset_colors)
 menu_bar.add_cascade(label="Mode", menu=mode_menu)
 
 app.config(menu=menu_bar)
