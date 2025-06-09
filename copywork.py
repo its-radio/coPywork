@@ -2,10 +2,17 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import json
+from datetime import datetime, timedelta
 
 # Global variables
 current_mode = "edit"  # "edit" or "practice"
 current_position = "1.0"
+wpm_timer = datetime.now()
+wpm_counter = 0
+wpm_10s_avg = 0
+wpm_max = 0  # New variable to track max WPM
+correct_chars = 0  # Track total correct characters
+incorrect_chars = 0  # Track total incorrect characters
 
 def save_file():
     file_path = filedialog.asksaveasfilename(defaultextension=".txt")
@@ -69,12 +76,15 @@ def open_file():
             pass
 
 def toggle_mode():
-    global current_mode, current_position
+    global current_mode, current_position, wpm_timer, wpm_counter
     
     if current_mode == "edit":
         current_mode = "practice"
         mode_label.config(text="Mode: Practice")
         text_area.config(state=tk.DISABLED)
+        # Reset WPM tracking when entering practice mode
+        wpm_timer = datetime.now()
+        wpm_counter = 0
         # Don't reset the cursor position if returning to practice mode
         if current_position == "1.0":  # Only set to beginning if first time
             current_position = "1.0"
@@ -89,8 +99,39 @@ def toggle_mode():
         app.unbind("<Key>")
         text_area.unbind("<Button-1>")
 
+def update_10s_wpm(delta_t):
+    global wpm_timer, wpm_counter, wpm_10s_avg, wpm_max
+    wpm_10s_avg = (wpm_counter / delta_t) * 60 / 5  # Divide by 5 chars per word
+    
+    # Update max WPM if current 10s average is higher
+    if wpm_10s_avg > wpm_max:
+        wpm_max = wpm_10s_avg
+    
+    # Calculate accuracy
+    total_chars = correct_chars + incorrect_chars
+    accuracy = (correct_chars / total_chars * 100) if total_chars > 0 else 100
+    
+    # Update the WPM and accuracy displays
+    wpm_label.config(text=f'10s Avg: {wpm_10s_avg:.1f} | Max: {wpm_max:.1f} WPM')
+    accuracy_label.config(text=f'Accuracy: {accuracy:.1f}%')
+    
+    wpm_counter = 0
+    wpm_timer = datetime.now()
+
+def check_wpm_timer():
+    """Check if 10 seconds have passed and update WPM if needed"""
+    global wpm_timer
+    current_time = datetime.now()
+    delta_t = (current_time - wpm_timer).total_seconds()
+    
+    if delta_t >= 10:
+        update_10s_wpm(delta_t)
+    
+    # Schedule this function to run again in 1 second
+    app.after(1000, check_wpm_timer)
+
 def check_typing(event):
-    global current_position
+    global current_position, wpm_counter, correct_chars, incorrect_chars
     
     # Handle backspace
     if event.keysym == 'BackSpace':
@@ -128,9 +169,13 @@ def check_typing(event):
         if event.char == expected_char:
             # Apply green color to the character
             text_area.tag_add("correct", current_position)
+            # Add one to the character counter
+            wpm_counter += 1
+            correct_chars += 1
         else:
             # Apply red color to the character
             text_area.tag_add("incorrect", current_position)
+            incorrect_chars += 1
         
         # Move to next character
         line, col = current_position.split('.')
@@ -171,6 +216,14 @@ frame.pack(fill='x')
 mode_label = tk.Label(frame, text="Mode: Edit")
 mode_label.pack(side='left')
 
+# WPM indicator
+wpm_label = tk.Label(frame, text=f'10s Avg: {wpm_10s_avg:.1f} | Max: {wpm_max:.1f} WPM')
+wpm_label.pack(side='right')
+
+# Accuracy indicator
+accuracy_label = tk.Label(frame, text='Accuracy: 100.0%')
+accuracy_label.pack(side='right', padx=(0, 10))
+
 # Text area
 text_area = tk.Text(app, wrap='word', font=('Fira Code', 12), bg="#333333", fg="#C1E4F6")  # dark gray background
 text_area.pack(expand=1, fill='both')
@@ -195,4 +248,5 @@ mode_menu.add_command(label="Reset Colors", command=reset_colors)
 menu_bar.add_cascade(label="Mode", menu=mode_menu)
 
 app.config(menu=menu_bar)
+app.after(1000, check_wpm_timer)
 app.mainloop()
