@@ -28,7 +28,7 @@ pip install tkinter
 
 Run the application:
 ```bash
-python coPywork.py
+python coPywork.py [/path/to/file.txt]
 ```
 
 - Use the `Mode` menu to toggle between Edit and Practice modes or reset your progress

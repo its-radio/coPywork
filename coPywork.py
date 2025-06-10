@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import json
 from datetime import datetime, timedelta
+import sys  # Import sys module for command line arguments
 
 # Global variables
 current_mode = "edit"  # "edit" or "practice"
@@ -15,15 +16,18 @@ correct_chars = 0  # Track total correct characters
 incorrect_chars = 0  # Track total incorrect characters
 session_start_time = None  # When active typing started
 session_chars = 0  # Characters typed in active session
-session_duration = 0  # Total active typing duration in seconds
+session_typing_duration = 0  # Total active typing duration in seconds
 last_typed_time = None  # Time of last keystroke
 is_typing_active = False  # Flag to track if typing is currently active
+current_file_path = None  # Track the currently open file
 
 def save_file():
-    file_path = filedialog.asksaveasfilename(defaultextension=".txt")
-    if file_path:
+    global current_file_path
+    
+    # If we already have a file path, save directly to it
+    if current_file_path:
         # Save the text content
-        with open(file_path, 'w') as file:
+        with open(current_file_path, 'w') as file:
             file.write(text_area.get(1.0, tk.END))
         
         # Save color information to a companion file
@@ -47,22 +51,28 @@ def save_file():
             color_data["incorrect"].append((start, end))
         
         # Save color data to a companion file
-        color_file_path = file_path + ".colors"
+        color_file_path = current_file_path + ".colors"
         with open(color_file_path, 'w') as color_file:
             json.dump(color_data, color_file)
+    else:
+        # No current file, prompt for a location
+        file_path = filedialog.asksaveasfilename(defaultextension=".txt")
+        if file_path:
+            current_file_path = file_path
+            save_file()  # Call save_file again now that we have a path
 
-def open_file():
-    file_path = filedialog.askopenfilename()
-    if file_path:
+def open_file(file_path):
+    global current_file_path
+    
+    try:
         # Open the text content
         with open(file_path, 'r') as file:
             text_area.delete(1.0, tk.END)
             text_area.insert(tk.END, file.read())
         
-        # Clear existing color tags
-        text_area.tag_remove("correct", "1.0", tk.END)
-        text_area.tag_remove("incorrect", "1.0", tk.END)
-        
+        # Set the current file path
+        current_file_path = file_path
+
         # Try to load color information from companion file
         color_file_path = file_path + ".colors"
         try:
@@ -79,6 +89,21 @@ def open_file():
         except FileNotFoundError:
             # No color data file exists, that's okay
             pass
+    except FileNotFoundError:
+        messagebox.showerror("Error", f"File not found: {file_path}")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error opening file: {str(e)}")
+
+def open_file_from_menu():
+    global current_file_path
+    
+    file_path = filedialog.askopenfilename()
+    if file_path:
+        current_file_path = file_path
+        open_file(file_path)
+
+def open_file_from_cmdline(file_path):
+    open_file(file_path)
 
 def toggle_mode():
     global current_mode, current_position, wpm_timer, wpm_counter
@@ -90,10 +115,11 @@ def toggle_mode():
         # Reset WPM tracking when entering practice mode
         wpm_timer = datetime.now()
         wpm_counter = 0
-        # Don't reset the cursor position if returning to practice mode
-        if current_position == "1.0":  # Only set to beginning if first time
-            current_position = "1.0"
-            text_area.mark_set("insert", current_position)
+        
+        # Save current cursor position before switching modes
+        current_position = text_area.index("insert")
+        text_area.mark_set("insert", current_position)
+        
         # Don't remove color tags anymore
         app.bind("<Key>", check_typing)
         text_area.bind("<Button-1>", set_cursor_position)
@@ -118,8 +144,8 @@ def update_10s_wpm(delta_t):
     
     # Calculate session average if typing is active
     session_avg = 0
-    if session_duration > 0:
-        session_avg = (session_chars / session_duration) * 60 / 5
+    if session_typing_duration > 0:
+        session_avg = (session_chars / session_typing_duration) * 60 / 5
     
     # Update the WPM and accuracy displays
     wpm_label.config(text=f'10s: {wpm_10s_avg:.1f} | Avg: {session_avg:.1f} | Max: {wpm_max:.1f} WPM')
@@ -130,7 +156,7 @@ def update_10s_wpm(delta_t):
 
 def check_typing_activity():
     """Check if typing has been inactive for 5 seconds"""
-    global is_typing_active, last_typed_time, session_duration
+    global is_typing_active, last_typed_time, session_typing_duration
     
     current_time = datetime.now()
     
@@ -140,10 +166,12 @@ def check_typing_activity():
         if inactive_time >= 5:
             # Pause the session timer
             is_typing_active = False
-            # Add the active duration to the session total
-            if session_start_time:
-                session_duration += (last_typed_time - session_start_time).total_seconds()
-                # Don't reset session_start_time so we can resume
+            # remove previous 5 seconds from the duration
+            if session_typing_duration <= 5:
+                session_typing_duration -= 5
+        elif session_start_time:
+            session_typing_duration += 1
+            # Don't reset session_start_time so we can resume
     
     # Schedule this function to run again in 1 second
     app.after(1000, check_typing_activity)
@@ -223,7 +251,7 @@ def check_typing(event):
         current_position = f"{line}.{int(col)+1}"
         text_area.mark_set("insert", current_position)
     
-    return "break"  # Prevent default handling
+    return "break"  # Prevent default handling (to prevent normal text editing)
 
 def set_cursor_position(event):
     global current_position
@@ -245,8 +273,14 @@ def reset_colors():
     text_area.tag_remove("incorrect", "1.0", tk.END)
     messagebox.showinfo("Reset", "All color formatting has been reset.")
 
+def bind_shortcuts():
+    """Bind keyboard shortcuts to functions"""
+    # Ctrl+S to save
+    app.bind("<Control-s>", lambda event: save_file())
+    app.bind("<Control-m>", lambda event: toggle_mode())
+
 app = tk.Tk()
-app.title("CoPywork")
+app.title("coPywork")
 app.geometry("600x400")
 
 # Create a frame for the mode label
@@ -258,7 +292,7 @@ mode_label = tk.Label(frame, text="Mode: Edit")
 mode_label.pack(side='left')
 
 # WPM indicator
-wpm_label = tk.Label(frame, text=f'10s Avg: {wpm_10s_avg:.1f} | Max: {wpm_max:.1f} WPM')
+wpm_label = tk.Label(frame, text=f'10s: {wpm_10s_avg:.1f} | Avg: 0.0 | Max: {wpm_max:.1f} WPM')
 wpm_label.pack(side='right')
 
 # Accuracy indicator
@@ -276,7 +310,7 @@ text_area.tag_configure("incorrect", foreground="#FC6A21")  # Less saturated red
 # Menu bar
 menu_bar = tk.Menu(app)
 file_menu = tk.Menu(menu_bar, tearoff=0)
-file_menu.add_command(label="Open", command=open_file)
+file_menu.add_command(label="Open", command=open_file_from_menu)
 file_menu.add_command(label="Save", command=save_file)
 file_menu.add_separator()
 file_menu.add_command(label="Exit", command=app.quit)
@@ -289,6 +323,16 @@ mode_menu.add_command(label="Reset Colors", command=reset_colors)
 menu_bar.add_cascade(label="Mode", menu=mode_menu)
 
 app.config(menu=menu_bar)
+
+# Bind keyboard shortcuts
+bind_shortcuts()
+
+# Check for command line arguments
+# Open file if one is specified
+if len(sys.argv) > 1:
+    file_path = sys.argv[1]
+    open_file(file_path)
+
 app.after(1000, check_wpm_timer)
 app.after(1000, check_typing_activity)
 app.mainloop()
