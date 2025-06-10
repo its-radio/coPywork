@@ -10,9 +10,14 @@ current_position = "1.0"
 wpm_timer = datetime.now()
 wpm_counter = 0
 wpm_10s_avg = 0
-wpm_max = 0  # New variable to track max WPM
+wpm_max = 0  # Track max WPM
 correct_chars = 0  # Track total correct characters
 incorrect_chars = 0  # Track total incorrect characters
+session_start_time = None  # When active typing started
+session_chars = 0  # Characters typed in active session
+session_duration = 0  # Total active typing duration in seconds
+last_typed_time = None  # Time of last keystroke
+is_typing_active = False  # Flag to track if typing is currently active
 
 def save_file():
     file_path = filedialog.asksaveasfilename(defaultextension=".txt")
@@ -111,12 +116,37 @@ def update_10s_wpm(delta_t):
     total_chars = correct_chars + incorrect_chars
     accuracy = (correct_chars / total_chars * 100) if total_chars > 0 else 100
     
+    # Calculate session average if typing is active
+    session_avg = 0
+    if session_duration > 0:
+        session_avg = (session_chars / session_duration) * 60 / 5
+    
     # Update the WPM and accuracy displays
-    wpm_label.config(text=f'10s Avg: {wpm_10s_avg:.1f} | Max: {wpm_max:.1f} WPM')
+    wpm_label.config(text=f'10s: {wpm_10s_avg:.1f} | Avg: {session_avg:.1f} | Max: {wpm_max:.1f} WPM')
     accuracy_label.config(text=f'Accuracy: {accuracy:.1f}%')
     
     wpm_counter = 0
     wpm_timer = datetime.now()
+
+def check_typing_activity():
+    """Check if typing has been inactive for 5 seconds"""
+    global is_typing_active, last_typed_time, session_duration
+    
+    current_time = datetime.now()
+    
+    # If typing is active but no keystrokes for 5 seconds
+    if is_typing_active and last_typed_time:
+        inactive_time = (current_time - last_typed_time).total_seconds()
+        if inactive_time >= 5:
+            # Pause the session timer
+            is_typing_active = False
+            # Add the active duration to the session total
+            if session_start_time:
+                session_duration += (last_typed_time - session_start_time).total_seconds()
+                # Don't reset session_start_time so we can resume
+    
+    # Schedule this function to run again in 1 second
+    app.after(1000, check_typing_activity)
 
 def check_wpm_timer():
     """Check if 10 seconds have passed and update WPM if needed"""
@@ -132,6 +162,16 @@ def check_wpm_timer():
 
 def check_typing(event):
     global current_position, wpm_counter, correct_chars, incorrect_chars
+    global session_start_time, session_chars, last_typed_time, is_typing_active
+    
+    # Update typing activity tracking
+    current_time = datetime.now()
+    last_typed_time = current_time
+    
+    # If this is the first keystroke or resuming after pause
+    if not is_typing_active:
+        is_typing_active = True
+        session_start_time = current_time
     
     # Handle backspace
     if event.keysym == 'BackSpace':
@@ -172,6 +212,7 @@ def check_typing(event):
             # Add one to the character counter
             wpm_counter += 1
             correct_chars += 1
+            session_chars += 1
         else:
             # Apply red color to the character
             text_area.tag_add("incorrect", current_position)
@@ -249,4 +290,5 @@ menu_bar.add_cascade(label="Mode", menu=mode_menu)
 
 app.config(menu=menu_bar)
 app.after(1000, check_wpm_timer)
+app.after(1000, check_typing_activity)
 app.mainloop()
