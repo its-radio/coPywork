@@ -49,6 +49,11 @@ python coPywork.py [/path/to/file.txt]
 - Ctrl + S: Save the current file
 - Ctrl + M: Toggle between Edit Mode & Practice Mode
 
+## Save format
+- coPywork files are saved as a zip archive with a .cw extension
+- The .cw files contain the text content as well as copying progress & statistics
+- If you wish to access the text content as a .txt file, simply unzip the .cw file and look for `content.txt`
+
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
