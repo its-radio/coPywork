@@ -24,18 +24,24 @@ last_typed_time = None  # Time of last keystroke
 is_typing_active = False  # Flag to track if typing is currently active
 current_file_path = None  # Track the currently open file
 
+def handle_file_save(file_path):
+    """Helper to check file extension and save using the correct method."""
+    global current_file_path
+    current_file_path = file_path
+    if current_file_path.lower().endswith('.txt'):
+        save_to_txt_file(current_file_path)
+    else:
+        # Add .cw extension if not present and not a .txt file
+        if not current_file_path.lower().endswith('.cw'):
+            current_file_path += '.cw'
+        save_to_cw_file(current_file_path)
+
 def save_file():
     global current_file_path
     
     # If we already have a file path, save directly to it
     if current_file_path:
-        # Check file extension to determine save method
-        if current_file_path.lower().endswith('.txt'):
-            # Use legacy save method for .txt files
-            save_to_txt_file(current_file_path)
-        else:
-            # Use new .cw format for other files
-            save_to_cw_file(current_file_path)
+        handle_file_save(current_file_path)
     else:
         # No current file, prompt for a location
         file_path = filedialog.asksaveasfilename(
@@ -43,15 +49,7 @@ def save_file():
             filetypes=[("CoPywork files", "*.cw"), ("Text files", "*.txt"), ("All files", "*.*")]
         )
         if file_path:
-            current_file_path = file_path
-            # Check file extension to determine save method
-            if current_file_path.lower().endswith('.txt'):
-                save_to_txt_file(current_file_path)
-            else:
-                # Add .cw extension if not present and not a .txt file
-                if not current_file_path.lower().endswith('.cw'):
-                    current_file_path += '.cw'
-                save_to_cw_file(current_file_path)
+            handle_file_save(file_path)
 
 def save_to_cw_file(file_path):
     """Save text content and color data to a .cw zip archive"""
@@ -405,17 +403,7 @@ def save_as_file():
     )
     
     if file_path:
-        # Update the current file path
-        current_file_path = file_path
-        
-        # Check file extension to determine save method
-        if current_file_path.lower().endswith('.txt'):
-            save_to_txt_file(current_file_path)
-        else:
-            # Add .cw extension if not present and not a .txt file
-            if not current_file_path.lower().endswith('.cw'):
-                current_file_path += '.cw'
-            save_to_cw_file(current_file_path)
+        handle_file_save(file_path)
 
 app = tk.Tk()
 app.title("coPywork")
