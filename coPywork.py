@@ -170,6 +170,12 @@ def open_cw_file(file_path):
         with tempfile.TemporaryDirectory() as temp_dir:
             # Extract the zip archive
             with zipfile.ZipFile(file_path, 'r') as zip_file:
+                # Validate required files exist
+                file_list = zip_file.namelist()
+                if 'content.txt' not in file_list:
+                    raise ValueError("Invalid .cw file: missing content.txt")
+                if 'colors.json' not in file_list:
+                    raise ValueError("Invalid .cw file: missing colors.json")
                 zip_file.extractall(temp_dir)
             
             # Load text content
@@ -194,6 +200,9 @@ def open_cw_file(file_path):
         # Set the current file path
         current_file_path = file_path
     
+    except ValueError as e:
+        # Handle validation errors specifically
+        messagebox.showerror("Invalid File", str(e))
     except Exception as e:
         messagebox.showerror("Error", f"Error opening .cw file: {str(e)}")
 
