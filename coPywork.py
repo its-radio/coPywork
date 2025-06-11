@@ -4,6 +4,9 @@ from tkinter import filedialog, messagebox
 import json
 from datetime import datetime, timedelta
 import sys  # Import sys module for command line arguments
+import zipfile  # For creating and reading .cw files
+import os  # For file operations
+import tempfile  # For temporary files
 
 # Global variables
 current_mode = "edit"  # "edit" or "practice"
@@ -26,11 +29,84 @@ def save_file():
     
     # If we already have a file path, save directly to it
     if current_file_path:
-        # Save the text content
-        with open(current_file_path, 'w') as file:
-            file.write(text_area.get(1.0, tk.END))
+        # Check file extension to determine save method
+        if current_file_path.lower().endswith('.txt'):
+            # Use legacy save method for .txt files
+            save_to_txt_file(current_file_path)
+        else:
+            # Use new .cw format for other files
+            save_to_cw_file(current_file_path)
+    else:
+        # No current file, prompt for a location
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".cw",
+            filetypes=[("CoPywork files", "*.cw"), ("Text files", "*.txt"), ("All files", "*.*")]
+        )
+        if file_path:
+            current_file_path = file_path
+            # Check file extension to determine save method
+            if current_file_path.lower().endswith('.txt'):
+                save_to_txt_file(current_file_path)
+            else:
+                # Add .cw extension if not present and not a .txt file
+                if not current_file_path.lower().endswith('.cw'):
+                    current_file_path += '.cw'
+                save_to_cw_file(current_file_path)
+
+def save_to_cw_file(file_path):
+    """Save text content and color data to a .cw zip archive"""
+    try:
+        # Create a temporary directory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Save text content to a temporary file
+            text_file_path = os.path.join(temp_dir, "content.txt")
+            with open(text_file_path, 'w', encoding='utf-8') as text_file:
+                text_file.write(text_area.get(1.0, tk.END))
+            
+            # Prepare color data
+            color_data = {
+                "correct": [],
+                "incorrect": []
+            }
+            
+            # Get all ranges with "correct" tag
+            correct_ranges = text_area.tag_ranges("correct")
+            for i in range(0, len(correct_ranges), 2):
+                start = text_area.index(correct_ranges[i])
+                end = text_area.index(correct_ranges[i+1])
+                color_data["correct"].append((start, end))
+            
+            # Get all ranges with "incorrect" tag
+            incorrect_ranges = text_area.tag_ranges("incorrect")
+            for i in range(0, len(incorrect_ranges), 2):
+                start = text_area.index(incorrect_ranges[i])
+                end = text_area.index(incorrect_ranges[i+1])
+                color_data["incorrect"].append((start, end))
+            
+            # Save color data to a temporary file
+            color_file_path = os.path.join(temp_dir, "colors.json")
+            with open(color_file_path, 'w', encoding='utf-8') as color_file:
+                json.dump(color_data, color_file)
+            
+            # Create a zip archive containing both files
+            with zipfile.ZipFile(file_path, 'w') as zip_file:
+                zip_file.write(text_file_path, arcname="content.txt")
+                zip_file.write(color_file_path, arcname="colors.json")
         
-        # Save color information to a companion file
+        # Show success message
+        messagebox.showinfo("Save Successful", f"File saved to {file_path}")
+    
+    except Exception as e:
+        messagebox.showerror("Error", f"Error saving file: {str(e)}")
+
+def save_to_txt_file(file_path):
+    """Save text content and color data to separate .txt and .colors files"""
+    try:
+        # Save text content
+        with open(file_path, 'w', encoding='utf-8') as text_file:
+            text_file.write(text_area.get(1.0, tk.END))
+        
+        # Prepare color data
         color_data = {
             "correct": [],
             "incorrect": []
@@ -51,32 +127,73 @@ def save_file():
             color_data["incorrect"].append((start, end))
         
         # Save color data to a companion file
-        color_file_path = current_file_path + ".colors"
-        with open(color_file_path, 'w') as color_file:
+        color_file_path = file_path + ".colors"
+        with open(color_file_path, 'w', encoding='utf-8') as color_file:
             json.dump(color_data, color_file)
-    else:
-        # No current file, prompt for a location
-        file_path = filedialog.asksaveasfilename(defaultextension=".txt")
-        if file_path:
-            current_file_path = file_path
-            save_file()  # Call save_file again now that we have a path
+        
+        # Show success message
+        messagebox.showinfo("Save Successful", f"File saved to {file_path}")
+    
+    except Exception as e:
+        messagebox.showerror("Error", f"Error saving file: {str(e)}")
 
 def open_file(file_path):
     global current_file_path
     
     try:
-        # Open the text content
-        with open(file_path, 'r') as file:
-            text_area.delete(1.0, tk.END)
-            text_area.insert(tk.END, file.read())
-        
-        # Set the current file path
-        current_file_path = file_path
+        # Check if file is a .cw file
+        if file_path.lower().endswith('.cw'):
+            open_cw_file(file_path)
+        else:
+            # Handle legacy .txt files
+            with open(file_path, 'r', encoding='utf-8') as file:
+                text_area.delete(1.0, tk.END)
+                text_area.insert(tk.END, file.read())
+            
+            # Set the current file path
+            current_file_path = file_path
 
-        # Try to load color information from companion file
-        color_file_path = file_path + ".colors"
-        try:
-            with open(color_file_path, 'r') as color_file:
+            # Try to load color information from companion file
+            color_file_path = file_path + ".colors"
+            try:
+                with open(color_file_path, 'r', encoding='utf-8') as color_file:
+                    color_data = json.load(color_file)
+                    
+                    # Apply "correct" tags
+                    for start, end in color_data["correct"]:
+                        text_area.tag_add("correct", start, end)
+                    
+                    # Apply "incorrect" tags
+                    for start, end in color_data["incorrect"]:
+                        text_area.tag_add("incorrect", start, end)
+            except FileNotFoundError:
+                # No color data file exists, that's okay
+                pass
+    except FileNotFoundError:
+        messagebox.showerror("Error", f"File not found: {file_path}")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error opening file: {str(e)}")
+
+def open_cw_file(file_path):
+    """Open a .cw zip archive and load its contents"""
+    global current_file_path
+    
+    try:
+        # Create a temporary directory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Extract the zip archive
+            with zipfile.ZipFile(file_path, 'r') as zip_file:
+                zip_file.extractall(temp_dir)
+            
+            # Load text content
+            text_file_path = os.path.join(temp_dir, "content.txt")
+            with open(text_file_path, 'r', encoding='utf-8') as text_file:
+                text_area.delete(1.0, tk.END)
+                text_area.insert(tk.END, text_file.read())
+            
+            # Load color data
+            color_file_path = os.path.join(temp_dir, "colors.json")
+            with open(color_file_path, 'r', encoding='utf-8') as color_file:
                 color_data = json.load(color_file)
                 
                 # Apply "correct" tags
@@ -86,20 +203,18 @@ def open_file(file_path):
                 # Apply "incorrect" tags
                 for start, end in color_data["incorrect"]:
                     text_area.tag_add("incorrect", start, end)
-        except FileNotFoundError:
-            # No color data file exists, that's okay
-            pass
-    except FileNotFoundError:
-        messagebox.showerror("Error", f"File not found: {file_path}")
+        
+        # Set the current file path
+        current_file_path = file_path
+    
     except Exception as e:
-        messagebox.showerror("Error", f"Error opening file: {str(e)}")
+        messagebox.showerror("Error", f"Error opening .cw file: {str(e)}")
 
 def open_file_from_menu():
-    global current_file_path
-    
-    file_path = filedialog.askopenfilename()
+    file_path = filedialog.askopenfilename(
+        filetypes=[("CoPywork files", "*.cw"), ("Text files", "*.txt"), ("All files", "*.*")]
+    )
     if file_path:
-        current_file_path = file_path
         open_file(file_path)
 
 def open_file_from_cmdline(file_path):
@@ -279,6 +394,29 @@ def bind_shortcuts():
     app.bind("<Control-s>", lambda event: save_file())
     app.bind("<Control-m>", lambda event: toggle_mode())
 
+def save_as_file():
+    """Save the current file with a new name"""
+    global current_file_path
+    
+    # Prompt for a new file location
+    file_path = filedialog.asksaveasfilename(
+        defaultextension=".cw",
+        filetypes=[("CoPywork files", "*.cw"), ("Text files", "*.txt"), ("All files", "*.*")]
+    )
+    
+    if file_path:
+        # Update the current file path
+        current_file_path = file_path
+        
+        # Check file extension to determine save method
+        if current_file_path.lower().endswith('.txt'):
+            save_to_txt_file(current_file_path)
+        else:
+            # Add .cw extension if not present and not a .txt file
+            if not current_file_path.lower().endswith('.cw'):
+                current_file_path += '.cw'
+            save_to_cw_file(current_file_path)
+
 app = tk.Tk()
 app.title("coPywork")
 app.geometry("600x400")
@@ -312,6 +450,7 @@ menu_bar = tk.Menu(app)
 file_menu = tk.Menu(menu_bar, tearoff=0)
 file_menu.add_command(label="Open", command=open_file_from_menu)
 file_menu.add_command(label="Save", command=save_file)
+file_menu.add_command(label="Save As", command=save_as_file)
 file_menu.add_separator()
 file_menu.add_command(label="Exit", command=app.quit)
 menu_bar.add_cascade(label="File", menu=file_menu)
