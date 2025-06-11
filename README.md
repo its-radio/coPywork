@@ -1,6 +1,15 @@
 # CoPywork
 
-A typing practice tool designed for programmers and technical writers to improve their typing speed and accuracy while working with real-world code and technical documentation.
+A tool that allows you to type over custom text.
+
+coPywork is a practice tool designed for writers, programmers, and anyone else to study real-world technical documentation, reports, literary works, or even code while improving their typing speed and accuracy at the same time.
+
+## What is Copywork?
+The practice of **copywork** has been used by writers for generations to enhance their voice by closely studying the style of other writers.
+
+Copywork remains useful for studying writing style today, but it can also be used to closely study technical reports, code, or any other text-based content.
+
+Finally, with the inclusion of typing-speed tracking, users can level up their typing at the same time.
 
 ## Features
 
@@ -35,6 +44,10 @@ python coPywork.py [/path/to/file.txt]
 - In Practice mode, type to match the text
 - Use File menu to open and save documents
 - WPM and accuracy stats are displayed in real-time
+
+## Shortcuts
+- Ctrl + S: Save the current file
+- Ctrl + M: Toggle between Edit Mode & Practice Mode
 
 ## Contributing
 
