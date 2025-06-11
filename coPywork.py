@@ -51,6 +51,29 @@ def save_file():
         if file_path:
             handle_file_save(file_path)
 
+def collect_color_data():
+    """Helper function to collect color tag ranges from the text area"""
+    color_data = {
+        "correct": [],
+        "incorrect": []
+    }
+    
+    # Get all ranges with "correct" tag
+    correct_ranges = text_area.tag_ranges("correct")
+    for i in range(0, len(correct_ranges), 2):
+        start = text_area.index(correct_ranges[i])
+        end = text_area.index(correct_ranges[i+1])
+        color_data["correct"].append((start, end))
+    
+    # Get all ranges with "incorrect" tag
+    incorrect_ranges = text_area.tag_ranges("incorrect")
+    for i in range(0, len(incorrect_ranges), 2):
+        start = text_area.index(incorrect_ranges[i])
+        end = text_area.index(incorrect_ranges[i+1])
+        color_data["incorrect"].append((start, end))
+    
+    return color_data
+
 def save_to_cw_file(file_path):
     """Save text content and color data to a .cw zip archive"""
     try:
@@ -61,25 +84,8 @@ def save_to_cw_file(file_path):
             with open(text_file_path, 'w', encoding='utf-8') as text_file:
                 text_file.write(text_area.get(1.0, tk.END))
             
-            # Prepare color data
-            color_data = {
-                "correct": [],
-                "incorrect": []
-            }
-            
-            # Get all ranges with "correct" tag
-            correct_ranges = text_area.tag_ranges("correct")
-            for i in range(0, len(correct_ranges), 2):
-                start = text_area.index(correct_ranges[i])
-                end = text_area.index(correct_ranges[i+1])
-                color_data["correct"].append((start, end))
-            
-            # Get all ranges with "incorrect" tag
-            incorrect_ranges = text_area.tag_ranges("incorrect")
-            for i in range(0, len(incorrect_ranges), 2):
-                start = text_area.index(incorrect_ranges[i])
-                end = text_area.index(incorrect_ranges[i+1])
-                color_data["incorrect"].append((start, end))
+            # Collect color data using the helper function
+            color_data = collect_color_data()
             
             # Save color data to a temporary file
             color_file_path = os.path.join(temp_dir, "colors.json")
@@ -104,25 +110,8 @@ def save_to_txt_file(file_path):
         with open(file_path, 'w', encoding='utf-8') as text_file:
             text_file.write(text_area.get(1.0, tk.END))
         
-        # Prepare color data
-        color_data = {
-            "correct": [],
-            "incorrect": []
-        }
-        
-        # Get all ranges with "correct" tag
-        correct_ranges = text_area.tag_ranges("correct")
-        for i in range(0, len(correct_ranges), 2):
-            start = text_area.index(correct_ranges[i])
-            end = text_area.index(correct_ranges[i+1])
-            color_data["correct"].append((start, end))
-        
-        # Get all ranges with "incorrect" tag
-        incorrect_ranges = text_area.tag_ranges("incorrect")
-        for i in range(0, len(incorrect_ranges), 2):
-            start = text_area.index(incorrect_ranges[i])
-            end = text_area.index(incorrect_ranges[i+1])
-            color_data["incorrect"].append((start, end))
+        # Collect color data using the helper function
+        color_data = collect_color_data()
         
         # Save color data to a companion file
         color_file_path = file_path + ".colors"
