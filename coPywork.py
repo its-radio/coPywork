@@ -269,8 +269,10 @@ def check_typing_activity():
             # Pause the session timer
             is_typing_active = False
             # remove previous 5 seconds from the duration
-            if session_typing_duration <= 5:
+            if session_typing_duration >= 5:
                 session_typing_duration -= 5
+            else:
+                session_typing_duration = 0
         elif session_start_time:
             session_typing_duration += 1
             # Don't reset session_start_time so we can resume
