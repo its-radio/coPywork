@@ -1,12 +1,32 @@
 #!/bin/env python3
 import tkinter as tk
 from tkinter import filedialog, messagebox
+import tkinter.font as tkfont
 import json
 from datetime import datetime, timedelta
 import sys  # Import sys module for command line arguments
 import zipfile  # For creating and reading .cw files
 import os  # For file operations
 import tempfile  # For temporary files
+
+# Import syntax highlighting modules
+try:
+    from pygments import highlight
+    from pygments.lexers import PythonLexer
+    from pygments.token import Token
+    PYGMENTS_AVAILABLE = True
+except ImportError:
+    PYGMENTS_AVAILABLE = False
+    print("Warning: Pygments not available. Syntax highlighting disabled.")
+
+# Import our custom modules
+try:
+    from .theme_loader import ThemeLoader
+    from .syntax_highlighter import SyntaxHighlighter
+    SYNTAX_MODULES_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Could not import syntax highlighting modules: {e}")
+    SYNTAX_MODULES_AVAILABLE = False
 
 # Global variables
 current_mode = "edit"  # "edit" or "practice"
@@ -24,21 +44,33 @@ last_typed_time = None  # Time of last keystroke
 is_typing_active = False  # Flag to track if typing is currently active
 current_file_path = None  # Track the currently open file
 
+# Syntax highlighting globals
+theme_loader = None
+syntax_highlighter = None
+
 def handle_file_save(file_path):
     """Helper to check file extension and save using the correct method."""
     global current_file_path
     current_file_path = file_path
+
+    # Handle different file types
     if current_file_path.lower().endswith('.txt'):
         save_to_txt_file(current_file_path)
+    elif current_file_path.lower().endswith('.py'):
+        # .py files save like .txt files (with .colors companion)
+        save_to_txt_file(current_file_path)
+    elif current_file_path.lower().endswith('.py.cw'):
+        # .py.cw files save like .cw files (as archive)
+        save_to_cw_file(current_file_path)
     else:
-        # Add .cw extension if not present and not a .txt file
+        # Add .cw extension if not present and not a recognized file type
         if not current_file_path.lower().endswith('.cw'):
             current_file_path += '.cw'
         save_to_cw_file(current_file_path)
 
 def save_file():
     global current_file_path
-    
+
     # If we already have a file path, save directly to it
     if current_file_path:
         handle_file_save(current_file_path)
@@ -46,7 +78,13 @@ def save_file():
         # No current file, prompt for a location
         file_path = filedialog.asksaveasfilename(
             defaultextension=".cw",
-            filetypes=[("CoPywork files", "*.cw"), ("Text files", "*.txt"), ("All files", "*.*")]
+            filetypes=[
+                ("CoPywork files", "*.cw"),
+                ("Python CoPywork files", "*.py.cw"),
+                ("Python files", "*.py"),
+                ("Text files", "*.txt"),
+                ("All files", "*.*")
+            ]
         )
         if file_path:
             handle_file_save(file_path)
@@ -126,17 +164,17 @@ def save_to_txt_file(file_path):
 
 def open_file(file_path):
     global current_file_path
-    
+
     try:
-        # Check if file is a .cw file
-        if file_path.lower().endswith('.cw'):
+        # Check if file is a .cw or .py.cw file
+        if file_path.lower().endswith(('.cw', '.py.cw')):
             open_cw_file(file_path)
         else:
-            # Handle legacy .txt files
+            # Handle .txt, .py, and other text files
             with open(file_path, 'r', encoding='utf-8') as file:
                 text_area.delete(1.0, tk.END)
                 text_area.insert(tk.END, file.read())
-            
+
             # Set the current file path
             current_file_path = file_path
 
@@ -145,17 +183,22 @@ def open_file(file_path):
             try:
                 with open(color_file_path, 'r', encoding='utf-8') as color_file:
                     color_data = json.load(color_file)
-                    
+
                     # Apply "correct" tags
                     for start, end in color_data["correct"]:
                         text_area.tag_add("correct", start, end)
-                    
+
                     # Apply "incorrect" tags
                     for start, end in color_data["incorrect"]:
                         text_area.tag_add("incorrect", start, end)
             except FileNotFoundError:
                 # No color data file exists, that's okay
                 pass
+
+        # Apply syntax highlighting if it's a Python file
+        if syntax_highlighter and current_file_path:
+            syntax_highlighter.highlight_text(current_file_path)
+
     except FileNotFoundError:
         messagebox.showerror("Error", f"File not found: {file_path}")
     except Exception as e:
@@ -208,7 +251,13 @@ def open_cw_file(file_path):
 
 def open_file_from_menu():
     file_path = filedialog.askopenfilename(
-        filetypes=[("CoPywork files", "*.cw"), ("Text files", "*.txt"), ("All files", "*.*")]
+        filetypes=[
+            ("CoPywork files", "*.cw"),
+            ("Python CoPywork files", "*.py.cw"),
+            ("Python files", "*.py"),
+            ("Text files", "*.txt"),
+            ("All files", "*.*")
+        ]
     )
     if file_path:
         open_file(file_path)
@@ -218,7 +267,7 @@ def open_file_from_cmdline(file_path):
 
 def toggle_mode():
     global current_mode, current_position, wpm_timer, wpm_counter
-    
+
     if current_mode == "edit":
         current_mode = "practice"
         mode_label.config(text="Mode: Practice")
@@ -226,11 +275,15 @@ def toggle_mode():
         # Reset WPM tracking when entering practice mode
         wpm_timer = datetime.now()
         wpm_counter = 0
-        
+
         # Save current cursor position before switching modes
         current_position = text_area.index("insert")
         text_area.mark_set("insert", current_position)
-        
+
+        # Apply washed-out syntax highlighting for practice mode
+        if syntax_highlighter and current_file_path:
+            syntax_highlighter.highlight_text_practice_mode(current_file_path)
+
         # Don't remove color tags anymore
         app.bind("<Key>", check_typing)
         text_area.bind("<Button-1>", set_cursor_position)
@@ -238,6 +291,11 @@ def toggle_mode():
         current_mode = "edit"
         mode_label.config(text="Mode: Edit")
         text_area.config(state=tk.NORMAL)
+
+        # Restore normal syntax highlighting for edit mode
+        if syntax_highlighter and current_file_path:
+            syntax_highlighter.highlight_text(current_file_path)
+
         app.unbind("<Key>")
         text_area.unbind("<Button-1>")
 
@@ -330,6 +388,11 @@ def check_typing(event):
         # Remove any color tags from the character
         text_area.tag_remove("correct", current_position)
         text_area.tag_remove("incorrect", current_position)
+
+        # If we have syntax highlighting, restore washed-out color for this position only
+        if syntax_highlighter and current_file_path:
+            # Restore washed-out syntax highlighting for just this position
+            syntax_highlighter.restore_washed_color_at_position(current_position, current_file_path)
         
         # Move cursor to the new position
         text_area.mark_set("insert", current_position)
@@ -348,6 +411,12 @@ def check_typing(event):
             
         # Check if typed character matches expected character
         if event.char == expected_char:
+            # Remove any existing syntax highlighting tags and apply correct color
+            if syntax_highlighter and current_file_path:
+                syntax_highlighter.apply_incorrect_color_at_position(current_position)
+                # Restore normal syntax highlighting for this position
+                syntax_highlighter.restore_normal_color_at_position(current_position, current_file_path)
+
             # Apply green color to the character
             text_area.tag_add("correct", current_position)
             # Add one to the character counter
@@ -355,6 +424,10 @@ def check_typing(event):
             correct_chars += 1
             session_chars += 1
         else:
+            # Remove any existing syntax highlighting tags and apply incorrect color
+            if syntax_highlighter and current_file_path:
+                syntax_highlighter.apply_incorrect_color_at_position(current_position)
+
             # Apply red color to the character
             text_area.tag_add("incorrect", current_position)
             incorrect_chars += 1
@@ -384,7 +457,21 @@ def reset_colors():
     # Remove all color tags from the text
     text_area.tag_remove("correct", "1.0", tk.END)
     text_area.tag_remove("incorrect", "1.0", tk.END)
+
+    # Restore appropriate syntax highlighting based on current mode
+    if syntax_highlighter and current_file_path:
+        if current_mode == "practice":
+            syntax_highlighter.highlight_text_practice_mode(current_file_path)
+        else:
+            syntax_highlighter.highlight_text(current_file_path)
+
     messagebox.showinfo("Reset", "All color formatting has been reset.")
+
+def on_text_change(event=None):
+    """Handle text changes and trigger syntax highlighting"""
+    if syntax_highlighter and current_file_path and current_mode == "edit":
+        # Schedule syntax highlighting to avoid blocking UI
+        app.after_idle(lambda: syntax_highlighter.highlight_text(current_file_path))
 
 def bind_shortcuts():
     """Bind keyboard shortcuts to functions"""
@@ -395,13 +482,19 @@ def bind_shortcuts():
 def save_as_file():
     """Save the current file with a new name"""
     global current_file_path
-    
+
     # Prompt for a new file location
     file_path = filedialog.asksaveasfilename(
         defaultextension=".cw",
-        filetypes=[("CoPywork files", "*.cw"), ("Text files", "*.txt"), ("All files", "*.*")]
+        filetypes=[
+            ("CoPywork files", "*.cw"),
+            ("Python CoPywork files", "*.py.cw"),
+            ("Python files", "*.py"),
+            ("Text files", "*.txt"),
+            ("All files", "*.*")
+        ]
     )
-    
+
     if file_path:
         handle_file_save(file_path)
 
@@ -431,7 +524,26 @@ text_area.pack(expand=1, fill='both')
 
 # Configure tags for correct and incorrect typing
 text_area.tag_configure("correct", foreground="#56DB3A")  # Less saturated green
-text_area.tag_configure("incorrect", foreground="#FC6A21")  # Less saturated red
+text_area.tag_configure("incorrect", foreground="#FF0000")  # Bright red for incorrect typing
+
+# Initialize syntax highlighting
+if SYNTAX_MODULES_AVAILABLE:
+    try:
+        theme_loader = ThemeLoader()
+        syntax_highlighter = SyntaxHighlighter(text_area, theme_loader)
+
+        # Bind text change events for syntax highlighting (only in edit mode)
+        text_area.bind('<KeyRelease>', on_text_change)
+        text_area.bind('<Button-1>', on_text_change)
+        text_area.bind('<ButtonRelease-1>', on_text_change)
+
+    except Exception as e:
+        print(f"Warning: Could not initialize syntax highlighting: {e}")
+        theme_loader = None
+        syntax_highlighter = None
+else:
+    theme_loader = None
+    syntax_highlighter = None
 
 # Menu bar
 menu_bar = tk.Menu(app)
@@ -454,12 +566,20 @@ app.config(menu=menu_bar)
 # Bind keyboard shortcuts
 bind_shortcuts()
 
-# Check for command line arguments
-# Open file if one is specified
-if len(sys.argv) > 1:
-    file_path = sys.argv[1]
-    open_file(file_path)
+def main():
+    """Main entry point for the application"""
+    global app, text_area, mode_label, wpm_label, accuracy_label
+    global theme_loader, syntax_highlighter
 
-app.after(1000, check_wpm_timer)
-app.after(1000, check_typing_activity)
-app.mainloop()
+    # Check for command line arguments
+    # Open file if one is specified
+    if len(sys.argv) > 1:
+        file_path = sys.argv[1]
+        open_file(file_path)
+
+    app.after(1000, check_wpm_timer)
+    app.after(1000, check_typing_activity)
+    app.mainloop()
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,21 @@
+# CoPywork - Typing Practice Tool with Syntax Highlighting
+# 
+# Core dependencies for syntax highlighting functionality
+pygments>=2.10.0
+
+# Note: tkinter is included with most Python installations
+# If tkinter is not available, install python3-tk on Ubuntu/Debian:
+# sudo apt-get install python3-tk
+#
+# On macOS with Homebrew:
+# brew install python-tk
+#
+# On Windows, tkinter is typically included with Python
+
+# Development and testing dependencies (optional)
+# Uncomment the following lines if you want to include development tools:
+#
+# pytest>=7.0.0          # For running tests
+# black>=22.0.0          # Code formatting
+# flake8>=4.0.0          # Code linting
+# mypy>=0.950            # Type checking

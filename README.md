@@ -14,32 +14,65 @@ Finally, with the inclusion of typing-speed tracking, users can level up their t
 ## Features
 
 - **Edit/Practice Modes**: Switch between editing text and practicing typing
-- **Real-time Statistics**: 
+- **Syntax Highlighting**: VSCode-style syntax highlighting for Python files (.py, .py.cw)
+- **Practice Mode Visual Feedback**:
+  - Washed-out syntax highlighting for untyped text
+  - Normal colors restored when typed correctly
+  - Bright red highlighting for incorrect typing
+- **Real-time Statistics**:
   - Words Per Minute (WPM) tracking
   - 10-second rolling average WPM
   - Maximum WPM achieved
   - Typing accuracy percentage
 - **Color-coded Feedback**: Visual indication of correct and incorrect typing
 - **Code-friendly Font**: Uses Fira Code font for better code readability
+- **Multiple File Formats**: Support for .txt, .cw, .py, and .py.cw files
 - **Save/Load Functionality**: Save your progress and color-coded feedback
 - **Dark Mode**: Easy on the eyes with a dark theme optimized for code
+- **VSCode Themes**: Customizable JSON themes compatible with VSCode
 
 ## Installation
 
-1. Ensure you have Python 3.x installed
-2. Clone this repository
-3. Install required dependencies:
+### Quick Install
 ```bash
-pip install tkinter
+# Create virtual environment (recommended)
+python3 -m venv .venv
+source .venv/bin/activate  # Linux/macOS
+# .venv\Scripts\activate   # Windows
+
+# Install dependencies
+pip install -r requirements.txt
 ```
+
+### Detailed Instructions
+See [INSTALL.md](INSTALL.md) for comprehensive installation instructions, including platform-specific setup and troubleshooting.
 
 ## Usage
 
-Run the application:
+### Quick Start
 ```bash
-python coPywork.py [/path/to/file.txt]
+# Run the application
+python copywork.py
+
+# Open a specific file
+python copywork.py examples/demo_practice_mode.py
+python copywork.py examples/demo_backspace_fix.py
+
+# Or use the package directly
+python -m copywork
 ```
 
+### Development Mode
+```bash
+# Install in development mode
+pip install -e .
+
+# Run from anywhere
+copywork
+copywork examples/demo_practice_mode.py
+```
+
+### Basic Usage
 - Use the `Mode` menu to toggle between Edit and Practice modes or reset your progress
 - In Practice mode, type to match the text
 - Use File menu to open and save documents
